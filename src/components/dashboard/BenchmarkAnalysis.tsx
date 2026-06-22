@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   AreaChart,
   Area,
@@ -12,7 +11,7 @@ import {
 import type { PerformancePoint, TimePeriod, RiskMetrics } from '@/types';
 import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { formatPercent, formatPercentRaw, formatShortDate } from '@/utils/formatters';
+import { formatCurrency, formatPercent, formatPercentRaw, formatShortDate } from '@/utils/formatters';
 import { clsx } from 'clsx';
 
 const PERIODS: TimePeriod[] = ['1M', '3M', '6M', '1Y', 'ALL'];
@@ -55,13 +54,11 @@ function CustomTooltip({ active, payload, label }: {
   );
 }
 
-interface RelativeMetricProps {
+function RelativeMetric({ label, value, format = 'percent' }: {
   label: string;
   value: number | undefined;
   format?: 'percent' | 'raw';
-}
-
-function RelativeMetric({ label, value, format = 'percent' }: RelativeMetricProps) {
+}) {
   if (value == null || !isFinite(value)) return (
     <div className="text-center">
       <div className="text-xs text-slate-500 mb-1">{label}</div>
@@ -84,6 +81,9 @@ interface BenchmarkAnalysisProps {
   isLoading: boolean;
   period: TimePeriod;
   onPeriodChange: (p: TimePeriod) => void;
+  totalDeposited: number;
+  portfolioCurrentValue: number | null;
+  spyDcaCurrentValue: number | null;
 }
 
 export function BenchmarkAnalysis({
@@ -92,16 +92,29 @@ export function BenchmarkAnalysis({
   isLoading,
   period,
   onPeriodChange,
+  totalDeposited,
+  portfolioCurrentValue,
+  spyDcaCurrentValue,
 }: BenchmarkAnalysisProps) {
   const lastPoint = performanceData[performanceData.length - 1];
   const portReturn = lastPoint ? (lastPoint.portfolio - 100) / 100 : 0;
   const spyReturn = lastPoint?.spy != null ? (lastPoint.spy - 100) / 100 : undefined;
-  const qqqReturn = lastPoint?.qqq != null ? (lastPoint.qqq - 100) / 100 : undefined;
+
+  // SPY DCA comparison
+  const spyDcaReturn = spyDcaCurrentValue != null && totalDeposited > 0
+    ? (spyDcaCurrentValue - totalDeposited) / totalDeposited
+    : null;
+  const vsSpyDca = portfolioCurrentValue != null && spyDcaCurrentValue != null
+    ? portfolioCurrentValue - spyDcaCurrentValue
+    : null;
+  const vsSpyDcaPct = vsSpyDca != null && spyDcaCurrentValue != null && spyDcaCurrentValue > 0
+    ? vsSpyDca / spyDcaCurrentValue
+    : null;
 
   return (
     <Card
       title="Benchmark Analysis"
-      subtitle="Portfolio vs SPY & QQQ"
+      subtitle="Portfolio vs SPY — since May 11, 2025"
       action={
         <div className="flex items-center gap-1">
           {PERIODS.map((p) => (
@@ -115,7 +128,7 @@ export function BenchmarkAnalysis({
         <RelativeMetric label={`Portfolio (${period})`} value={portReturn} />
         <RelativeMetric label={`SPY (${period})`} value={spyReturn} />
         <RelativeMetric label="Alpha vs SPY" value={riskMetrics?.alphaSPY} />
-        <RelativeMetric label="Alpha vs QQQ" value={riskMetrics?.alphaQQQ} />
+        <RelativeMetric label="Excess Return vs SPY" value={riskMetrics?.excessReturnSPY} />
       </div>
 
       {isLoading ? (
@@ -133,10 +146,6 @@ export function BenchmarkAnalysis({
               <linearGradient id="spyGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#a855f7" stopOpacity={0.1} />
                 <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="qqqGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1} />
-                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#1a2d42" vertical={false} />
@@ -181,28 +190,80 @@ export function BenchmarkAnalysis({
               activeDot={{ r: 4, strokeWidth: 0 }}
               strokeDasharray="4 2"
             />
-            <Area
-              type="monotone"
-              dataKey="qqq"
-              name="QQQ"
-              stroke="#f59e0b"
-              strokeWidth={1.5}
-              fill="url(#qqqGrad)"
-              dot={false}
-              activeDot={{ r: 4, strokeWidth: 0 }}
-              strokeDasharray="4 2"
-            />
           </AreaChart>
         </ResponsiveContainer>
       )}
 
-      {/* Relative metrics grid */}
+      {/* SPY DCA Comparison — "what if you bought SPY on each deposit date?" */}
+      <div className="mt-5 pt-4 border-t border-border">
+        <div className="text-xs text-slate-500 font-medium mb-3 uppercase tracking-wide">
+          vs SPY DCA — What if you bought SPY on each deposit date?
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-bg-secondary/60 rounded-lg p-3">
+            <div className="text-2xs text-slate-500 mb-1">Total Deposited</div>
+            <div className="text-sm font-mono font-semibold text-slate-200">
+              {formatCurrency(totalDeposited)}
+            </div>
+          </div>
+          <div className="bg-bg-secondary/60 rounded-lg p-3">
+            <div className="text-2xs text-slate-500 mb-1">Your Portfolio</div>
+            <div className={clsx(
+              'text-sm font-mono font-semibold',
+              portfolioCurrentValue != null && portfolioCurrentValue > totalDeposited ? 'text-gain' : 'text-loss'
+            )}>
+              {portfolioCurrentValue != null ? formatCurrency(portfolioCurrentValue) : 'N/A'}
+            </div>
+            {portfolioCurrentValue != null && (
+              <div className={clsx(
+                'text-2xs font-mono mt-0.5',
+                portfolioCurrentValue >= totalDeposited ? 'text-gain' : 'text-loss'
+              )}>
+                {formatPercent((portfolioCurrentValue - totalDeposited) / totalDeposited)}
+              </div>
+            )}
+          </div>
+          <div className="bg-bg-secondary/60 rounded-lg p-3">
+            <div className="text-2xs text-slate-500 mb-1">SPY DCA Would Be</div>
+            <div className={clsx(
+              'text-sm font-mono font-semibold',
+              spyDcaCurrentValue != null && spyDcaCurrentValue > totalDeposited ? 'text-gain' : 'text-loss'
+            )}>
+              {spyDcaCurrentValue != null ? formatCurrency(spyDcaCurrentValue) : 'N/A'}
+            </div>
+            {spyDcaReturn != null && (
+              <div className={clsx(
+                'text-2xs font-mono mt-0.5',
+                spyDcaReturn >= 0 ? 'text-gain' : 'text-loss'
+              )}>
+                {formatPercent(spyDcaReturn)}
+              </div>
+            )}
+          </div>
+          <div className="bg-bg-secondary/60 rounded-lg p-3">
+            <div className="text-2xs text-slate-500 mb-1">You vs SPY DCA</div>
+            <div className={clsx(
+              'text-sm font-mono font-semibold',
+              vsSpyDca == null ? 'text-slate-600' : vsSpyDca >= 0 ? 'text-gain' : 'text-loss'
+            )}>
+              {vsSpyDca != null ? (vsSpyDca >= 0 ? '+' : '') + formatCurrency(vsSpyDca) : 'N/A'}
+            </div>
+            {vsSpyDcaPct != null && (
+              <div className={clsx(
+                'text-2xs font-mono mt-0.5',
+                vsSpyDcaPct >= 0 ? 'text-gain' : 'text-loss'
+              )}>
+                {(vsSpyDcaPct >= 0 ? '+' : '') + formatPercentRaw(vsSpyDcaPct)}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Correlation */}
       {riskMetrics && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-4 border-t border-border">
-          <RelativeMetric label="Excess Return vs SPY" value={riskMetrics.excessReturnSPY} />
-          <RelativeMetric label="Excess Return vs QQQ" value={riskMetrics.excessReturnQQQ} />
+        <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 mt-4 pt-4 border-t border-border">
           <RelativeMetric label="Correlation to SPY" value={riskMetrics.correlationSPY} format="raw" />
-          <RelativeMetric label="Correlation to QQQ" value={riskMetrics.correlationQQQ} format="raw" />
         </div>
       )}
     </Card>

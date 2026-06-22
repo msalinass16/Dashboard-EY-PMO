@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { TimePeriod } from '@/types';
-import { HOLDINGS, BENCHMARK_TICKERS, ALL_TICKERS } from '@/data/holdings';
+import { HOLDINGS, ALL_TICKERS, CASH_FLOWS, PORTFOLIO_INCEPTION, TOTAL_DEPOSITED } from '@/data/holdings';
 import { useQuotes } from '@/hooks/useQuotes';
 import { useHistoricalData } from '@/hooks/useHistoricalData';
 import { usePortfolioFundamentals } from '@/hooks/useFundamentals';
@@ -15,6 +15,7 @@ import {
 } from '@/utils/portfolioCalculations';
 import {
   buildPortfolioHistory,
+  buildSpyDcaHistory,
   buildPerformanceChart,
   filterByPeriod,
   calcRiskMetrics,
@@ -60,17 +61,17 @@ export function Dashboard() {
     [positions, fundamentals]
   );
 
-  // Performance chart
+  // Performance chart — always starts from portfolio inception date
   const performanceData = useMemo(() => {
     if (histData.size === 0) return [];
     const portfolioHistory = buildPortfolioHistory(
       HOLDINGS.map((h) => ({ ticker: h.ticker, shares: h.shares })),
       histData
-    );
+    ).filter((d) => d.date >= PORTFOLIO_INCEPTION);
     const spyHistory = histData.get('SPY') ?? [];
-    const qqqHistory = histData.get('QQQ') ?? [];
-    const chart = buildPerformanceChart(portfolioHistory, spyHistory, qqqHistory);
-    return filterByPeriod(chart, period);
+    const spyDcaHistory = buildSpyDcaHistory(spyHistory, CASH_FLOWS);
+    const chart = buildPerformanceChart(portfolioHistory, spyHistory, spyDcaHistory);
+    return filterByPeriod(chart, period, PORTFOLIO_INCEPTION);
   }, [histData, period]);
 
   // Risk metrics
@@ -79,10 +80,9 @@ export function Dashboard() {
     const portfolioHistory = buildPortfolioHistory(
       HOLDINGS.map((h) => ({ ticker: h.ticker, shares: h.shares })),
       histData
-    );
+    ).filter((d) => d.date >= PORTFOLIO_INCEPTION);
     const spyHistory = histData.get('SPY') ?? [];
-    const qqqHistory = histData.get('QQQ') ?? [];
-    return calcRiskMetrics(portfolioHistory, spyHistory, qqqHistory);
+    return calcRiskMetrics(portfolioHistory, spyHistory);
   }, [histData]);
 
   // Weighted portfolio beta from quotes as quick fallback
@@ -130,6 +130,13 @@ export function Dashboard() {
           isLoading={histLoading}
           period={period}
           onPeriodChange={setPeriod}
+          totalDeposited={TOTAL_DEPOSITED}
+          portfolioCurrentValue={summary?.totalValue ?? null}
+          spyDcaCurrentValue={
+            performanceData.length > 0
+              ? (performanceData[performanceData.length - 1].spyDcaValue ?? null)
+              : null
+          }
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

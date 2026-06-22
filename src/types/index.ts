@@ -124,11 +124,8 @@ export interface RiskMetrics {
   sharpeRatio: number;
   maxDrawdown: number;
   alphaSPY: number;
-  alphaQQQ: number;
   excessReturnSPY: number;
-  excessReturnQQQ: number;
   correlationSPY: number;
-  correlationQQQ: number;
 }
 
 export interface WeightedValuationMetrics {
@@ -166,7 +163,7 @@ export interface PerformancePoint {
   date: string;
   portfolio: number;
   spy: number | null;
-  qqq: number | null;
+  spyDcaValue: number | null;
   portfolioValue?: number;
 }
 

@@ -115,71 +115,101 @@ export function normalizeToBase100(series: HistoricalDataPoint[]): HistoricalDat
   return series.map((d) => ({ ...d, close: (d.close / base) * 100 }));
 }
 
+export function buildSpyDcaHistory(
+  spyHistory: HistoricalDataPoint[],
+  cashFlows: ReadonlyArray<{ date: string; amount: number }>
+): HistoricalDataPoint[] {
+  const spyPriceMap = new Map(spyHistory.map((d) => [d.date, d.close]));
+  const sortedDates = spyHistory.map((d) => d.date).sort();
+
+  // Find the first available trading date on or after each cash flow date
+  const purchases: Array<{ date: string; shares: number }> = [];
+  for (const cf of cashFlows) {
+    const tradingDate = sortedDates.find((d) => d >= cf.date);
+    if (!tradingDate) continue;
+    const price = spyPriceMap.get(tradingDate) ?? 0;
+    if (price > 0) purchases.push({ date: tradingDate, shares: cf.amount / price });
+  }
+
+  let cumulativeShares = 0;
+  const result: HistoricalDataPoint[] = [];
+  for (const point of spyHistory) {
+    for (const purchase of purchases) {
+      if (purchase.date === point.date) cumulativeShares += purchase.shares;
+    }
+    if (cumulativeShares > 0) {
+      result.push({ date: point.date, timestamp: point.timestamp, close: cumulativeShares * point.close });
+    }
+  }
+  return result;
+}
+
 export function buildPerformanceChart(
   portfolioHistory: HistoricalDataPoint[],
   spyHistory: HistoricalDataPoint[],
-  qqqHistory: HistoricalDataPoint[]
+  spyDcaHistory: HistoricalDataPoint[]
 ): PerformancePoint[] {
   if (portfolioHistory.length === 0) return [];
 
   const portfolioBase = portfolioHistory[0].close;
   const spyBase = spyHistory[0]?.close ?? 1;
-  const qqqBase = qqqHistory[0]?.close ?? 1;
 
   const spyMap = new Map(spyHistory.map((d) => [d.date, d.close]));
-  const qqqMap = new Map(qqqHistory.map((d) => [d.date, d.close]));
+  const spyDcaMap = new Map(spyDcaHistory.map((d) => [d.date, d.close]));
 
   return portfolioHistory.map((p) => ({
     date: p.date,
     portfolio: portfolioBase > 0 ? (p.close / portfolioBase) * 100 : 100,
     portfolioValue: p.close,
-    spy: spyBase > 0 && spyMap.has(p.date) ? ((spyMap.get(p.date)! / spyBase) * 100) : null,
-    qqq: qqqBase > 0 && qqqMap.has(p.date) ? ((qqqMap.get(p.date)! / qqqBase) * 100) : null,
+    spy: spyBase > 0 && spyMap.has(p.date) ? (spyMap.get(p.date)! / spyBase) * 100 : null,
+    spyDcaValue: spyDcaMap.get(p.date) ?? null,
   }));
 }
 
 export function filterByPeriod<T extends { date: string }>(
   data: T[],
-  period: '1M' | '3M' | '6M' | '1Y' | 'ALL'
+  period: '1M' | '3M' | '6M' | '1Y' | 'ALL',
+  minDate?: string
 ): T[] {
-  if (period === 'ALL' || data.length === 0) return data;
-  const months = period === '1M' ? 1 : period === '3M' ? 3 : period === '6M' ? 6 : 12;
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - months);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
-  return data.filter((d) => d.date >= cutoffStr);
+  if (data.length === 0) return data;
+
+  const floors: string[] = [];
+  if (minDate) floors.push(minDate);
+
+  if (period !== 'ALL') {
+    const months = period === '1M' ? 1 : period === '3M' ? 3 : period === '6M' ? 6 : 12;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - months);
+    floors.push(cutoff.toISOString().slice(0, 10));
+  }
+
+  if (floors.length === 0) return data;
+  // Use the most recent floor so both minDate and period are respected
+  const effectiveCutoff = floors.reduce((a, b) => (a > b ? a : b));
+  return data.filter((d) => d.date >= effectiveCutoff);
 }
 
 export function calcRiskMetrics(
   portfolioHistory: HistoricalDataPoint[],
-  spyHistory: HistoricalDataPoint[],
-  qqqHistory: HistoricalDataPoint[]
+  spyHistory: HistoricalDataPoint[]
 ): RiskMetrics | null {
   if (portfolioHistory.length < 20) return null;
 
   const portfolioReturns = calcDailyReturns(portfolioHistory);
   const spyReturns = calcDailyReturns(spyHistory);
-  const qqqReturns = calcDailyReturns(qqqHistory);
 
   const n = Math.min(portfolioReturns.length, spyReturns.length);
   const pRet = portfolioReturns.slice(-n);
   const sRet = spyReturns.slice(-n);
-  const qRet = qqqReturns.slice(-Math.min(portfolioReturns.length, qqqReturns.length));
 
   const vol = stdDev(pRet) * Math.sqrt(252);
   const annReturn = calcAnnualizedReturn(portfolioHistory);
   const betaSPY = calcBeta(pRet, sRet);
-  const betaQQQ = calcBeta(pRet, qRet);
   const sharpe = calcSharpe(annReturn, vol);
   const maxDD = calcMaxDrawdown(portfolioHistory);
 
   const spyAnnReturn = calcAnnualizedReturn(spyHistory);
-  const qqqAnnReturn = calcAnnualizedReturn(qqqHistory);
-
   const alphaSPY = calcAlpha(annReturn, spyAnnReturn, betaSPY);
-  const alphaQQQ = calcAlpha(annReturn, qqqAnnReturn, betaQQQ);
-  const excessReturnSPY = annReturn - spyAnnReturn;
-  const excessReturnQQQ = annReturn - qqqAnnReturn;
 
   return {
     portfolioBeta: betaSPY,
@@ -188,10 +218,7 @@ export function calcRiskMetrics(
     sharpeRatio: sharpe,
     maxDrawdown: maxDD,
     alphaSPY,
-    alphaQQQ,
-    excessReturnSPY,
-    excessReturnQQQ,
+    excessReturnSPY: annReturn - spyAnnReturn,
     correlationSPY: correlation(pRet, sRet),
-    correlationQQQ: correlation(pRet, qRet),
   };
 }

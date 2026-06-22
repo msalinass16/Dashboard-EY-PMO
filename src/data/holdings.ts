@@ -120,7 +120,17 @@ export const HOLDINGS: Holding[] = [
   },
 ];
 
-export const BENCHMARK_TICKERS = ['SPY', 'QQQ'] as const;
+export const BENCHMARK_TICKERS = ['SPY'] as const;
 export const ALL_TICKERS = [...HOLDINGS.map((h) => h.ticker), ...BENCHMARK_TICKERS];
 
 export const RISK_FREE_RATE = 0.0525; // 5.25% — approximate current T-bill rate
+
+export const PORTFOLIO_INCEPTION = '2025-05-11';
+
+export const CASH_FLOWS = [
+  { date: '2025-05-11', amount: 1500 },
+  { date: '2025-05-18', amount: 1880 },
+  { date: '2025-06-03', amount: 1500 },
+] as const;
+
+export const TOTAL_DEPOSITED = 4880;
