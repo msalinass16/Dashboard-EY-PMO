@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { TimePeriod } from '@/types';
-import { HOLDINGS, ALL_TICKERS, CASH_FLOWS, PORTFOLIO_INCEPTION, TOTAL_DEPOSITED } from '@/data/holdings';
+import { HOLDINGS, ALL_TICKERS, CASH_FLOWS, PORTFOLIO_INCEPTION } from '@/data/holdings';
 import { useQuotes } from '@/hooks/useQuotes';
 import { useHistoricalData } from '@/hooks/useHistoricalData';
 import { usePortfolioFundamentals } from '@/hooks/useFundamentals';
@@ -139,13 +139,6 @@ export function Dashboard() {
           isLoading={histLoading}
           period={period}
           onPeriodChange={setPeriod}
-          totalDeposited={TOTAL_DEPOSITED}
-          portfolioCurrentValue={summary?.totalValue ?? null}
-          spyDcaCurrentValue={
-            performanceData.length > 0
-              ? (performanceData[performanceData.length - 1].spyDcaValue ?? null)
-              : null
-          }
           portfolioGainLossPercent={summary?.totalGainLossPercent ?? null}
         />
 

@@ -12,7 +12,7 @@ import type { PerformancePoint, TimePeriod, RiskMetrics } from '@/types';
 import { PORTFOLIO_INCEPTION } from '@/data/holdings';
 import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { formatCurrency, formatPercent, formatPercentRaw, formatShortDate } from '@/utils/formatters';
+import { formatPercent, formatPercentRaw, formatShortDate } from '@/utils/formatters';
 import { clsx } from 'clsx';
 
 const PERIODS: TimePeriod[] = ['1M', '3M', '6M', '1Y', 'ALL'];
@@ -82,9 +82,6 @@ interface BenchmarkAnalysisProps {
   isLoading: boolean;
   period: TimePeriod;
   onPeriodChange: (p: TimePeriod) => void;
-  totalDeposited: number;
-  portfolioCurrentValue: number | null;
-  spyDcaCurrentValue: number | null;
   portfolioGainLossPercent: number | null;
 }
 
@@ -94,9 +91,6 @@ export function BenchmarkAnalysis({
   isLoading,
   period,
   onPeriodChange,
-  totalDeposited,
-  portfolioCurrentValue,
-  spyDcaCurrentValue,
   portfolioGainLossPercent,
 }: BenchmarkAnalysisProps) {
   // Hard guard: never display data before portfolio inception regardless of what upstream passes
@@ -105,17 +99,6 @@ export function BenchmarkAnalysis({
   const lastPoint = performanceData[performanceData.length - 1];
   const portReturn = portfolioGainLossPercent ?? (lastPoint ? (lastPoint.portfolio - 100) / 100 : 0);
   const spyReturn = lastPoint?.spy != null ? (lastPoint.spy - 100) / 100 : undefined;
-
-  // SPY DCA comparison
-  const spyDcaReturn = spyDcaCurrentValue != null && totalDeposited > 0
-    ? (spyDcaCurrentValue - totalDeposited) / totalDeposited
-    : null;
-  const vsSpyDca = portfolioCurrentValue != null && spyDcaCurrentValue != null
-    ? portfolioCurrentValue - spyDcaCurrentValue
-    : null;
-  const vsSpyDcaPct = vsSpyDca != null && spyDcaCurrentValue != null && spyDcaCurrentValue > 0
-    ? vsSpyDca / spyDcaCurrentValue
-    : null;
 
   return (
     <Card
@@ -197,72 +180,6 @@ export function BenchmarkAnalysis({
           </AreaChart>
         </ResponsiveContainer>
       )}
-
-      {/* SPY DCA Comparison — "what if you bought SPY on each deposit date?" */}
-      <div className="mt-5 pt-4 border-t border-border">
-        <div className="text-xs text-slate-500 font-medium mb-3 uppercase tracking-wide">
-          vs SPY DCA — What if you bought SPY on each deposit date?
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-bg-secondary/60 rounded-lg p-3">
-            <div className="text-2xs text-slate-500 mb-1">Total Deposited</div>
-            <div className="text-sm font-mono font-semibold text-slate-200">
-              {formatCurrency(totalDeposited)}
-            </div>
-          </div>
-          <div className="bg-bg-secondary/60 rounded-lg p-3">
-            <div className="text-2xs text-slate-500 mb-1">Your Portfolio</div>
-            <div className={clsx(
-              'text-sm font-mono font-semibold',
-              portfolioCurrentValue != null && portfolioCurrentValue > totalDeposited ? 'text-gain' : 'text-loss'
-            )}>
-              {portfolioCurrentValue != null ? formatCurrency(portfolioCurrentValue) : 'N/A'}
-            </div>
-            {portfolioCurrentValue != null && (
-              <div className={clsx(
-                'text-2xs font-mono mt-0.5',
-                portfolioCurrentValue >= totalDeposited ? 'text-gain' : 'text-loss'
-              )}>
-                {formatPercent((portfolioCurrentValue - totalDeposited) / totalDeposited)}
-              </div>
-            )}
-          </div>
-          <div className="bg-bg-secondary/60 rounded-lg p-3">
-            <div className="text-2xs text-slate-500 mb-1">SPY DCA Would Be</div>
-            <div className={clsx(
-              'text-sm font-mono font-semibold',
-              spyDcaCurrentValue != null && spyDcaCurrentValue > totalDeposited ? 'text-gain' : 'text-loss'
-            )}>
-              {spyDcaCurrentValue != null ? formatCurrency(spyDcaCurrentValue) : 'N/A'}
-            </div>
-            {spyDcaReturn != null && (
-              <div className={clsx(
-                'text-2xs font-mono mt-0.5',
-                spyDcaReturn >= 0 ? 'text-gain' : 'text-loss'
-              )}>
-                {formatPercent(spyDcaReturn)}
-              </div>
-            )}
-          </div>
-          <div className="bg-bg-secondary/60 rounded-lg p-3">
-            <div className="text-2xs text-slate-500 mb-1">You vs SPY DCA</div>
-            <div className={clsx(
-              'text-sm font-mono font-semibold',
-              vsSpyDca == null ? 'text-slate-600' : vsSpyDca >= 0 ? 'text-gain' : 'text-loss'
-            )}>
-              {vsSpyDca != null ? (vsSpyDca >= 0 ? '+' : '') + formatCurrency(vsSpyDca) : 'N/A'}
-            </div>
-            {vsSpyDcaPct != null && (
-              <div className={clsx(
-                'text-2xs font-mono mt-0.5',
-                vsSpyDcaPct >= 0 ? 'text-gain' : 'text-loss'
-              )}>
-                {(vsSpyDcaPct >= 0 ? '+' : '') + formatPercentRaw(vsSpyDcaPct)}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
     </Card>
   );
