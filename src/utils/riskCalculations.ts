@@ -151,11 +151,13 @@ export function buildPerformanceChart(
 ): PerformancePoint[] {
   if (portfolioHistory.length === 0) return [];
 
+  const firstDate = portfolioHistory[0].date;
   const portfolioBase = portfolioHistory[0].close;
-  const spyBase = spyHistory[0]?.close ?? 1;
 
   const spyMap = new Map(spyHistory.map((d) => [d.date, d.close]));
   const spyDcaMap = new Map(spyDcaHistory.map((d) => [d.date, d.close]));
+  // Normalize SPY to 100 on the same date the portfolio starts, not SPY's earliest data
+  const spyBase = spyMap.get(firstDate) ?? spyHistory[0]?.close ?? 1;
 
   return portfolioHistory.map((p) => ({
     date: p.date,

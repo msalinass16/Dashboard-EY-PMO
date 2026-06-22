@@ -30,7 +30,7 @@ import { BenchmarkAnalysis } from '@/components/dashboard/BenchmarkAnalysis';
 import { RiskAnalytics } from '@/components/dashboard/RiskAnalytics';
 
 export function Dashboard() {
-  const [period, setPeriod] = useState<TimePeriod>('1Y');
+  const [period, setPeriod] = useState<TimePeriod>('ALL');
 
   const { quotes, isLoading: quotesLoading, lastUpdated, refresh, usingMock } = useQuotes(ALL_TICKERS);
   const { data: histData, isLoading: histLoading } = useHistoricalData(ALL_TICKERS, period);
