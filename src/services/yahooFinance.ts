@@ -61,8 +61,9 @@ async function fetchSingleQuote(ticker: string): Promise<QuoteData> {
         longName?: string;
         shortName?: string;
         regularMarketPrice?: number;
+        regularMarketChange?: number;
+        regularMarketChangePercent?: number;
         previousClose?: number;
-        chartPreviousClose?: number;
         regularMarketVolume?: number;
         marketCap?: number;
         trailingPE?: number;
@@ -81,8 +82,12 @@ async function fetchSingleQuote(ticker: string): Promise<QuoteData> {
   const meta = result.meta ?? {};
   const closes = result.indicators?.adjclose?.[0]?.adjclose ?? [];
   const price = meta.regularMarketPrice ?? closes[closes.length - 1] ?? 0;
-  const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? closes[closes.length - 2] ?? price;
-  const change = price - prevClose;
+
+  // Prefer Yahoo Finance's own change fields (most reliable).
+  // Never fall back to chartPreviousClose — that is the close at the START
+  // of the 5-day chart window (5 days ago), not yesterday.
+  const change = meta.regularMarketChange ?? (price - (meta.previousClose ?? closes[closes.length - 2] ?? price));
+  const prevClose = price - change;
 
   return {
     ticker,
@@ -90,7 +95,9 @@ async function fetchSingleQuote(ticker: string): Promise<QuoteData> {
     price,
     previousClose: prevClose,
     change,
-    changePercent: prevClose > 0 ? change / prevClose : 0,
+    changePercent: meta.regularMarketChangePercent != null
+      ? meta.regularMarketChangePercent / 100
+      : prevClose > 0 ? change / prevClose : 0,
     marketCap: meta.marketCap,
     volume: meta.regularMarketVolume,
     pe: meta.trailingPE,
