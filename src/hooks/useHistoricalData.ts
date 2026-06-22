@@ -11,7 +11,7 @@ function periodToRange(period: TimePeriod): YFRange {
     case '1M': return '1mo';
     case '3M': return '3mo';
     case '6M': return '6mo';
-    case 'ALL': return '2y';
+    case 'ALL': return '3mo';
     default: return '1y';
   }
 }
@@ -21,7 +21,7 @@ function periodToDays(period: TimePeriod): number {
     case '1M': return 30;
     case '3M': return 90;
     case '6M': return 180;
-    case 'ALL': return 730;
+    case 'ALL': return 90;
     default: return 365;
   }
 }

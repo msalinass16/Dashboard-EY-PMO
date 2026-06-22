@@ -61,29 +61,38 @@ export function Dashboard() {
     [positions, fundamentals]
   );
 
+  // Clip every ticker's history to inception so newer ETFs (DRAM, NASA)
+  // don't pull the common-date intersection back before May 11
+  const histFromInception = useMemo(() => {
+    if (histData.size === 0) return histData;
+    return new Map(
+      [...histData.entries()].map(([t, d]) => [t, d.filter((p) => p.date >= PORTFOLIO_INCEPTION)])
+    );
+  }, [histData]);
+
   // Performance chart — always starts from portfolio inception date
   const performanceData = useMemo(() => {
-    if (histData.size === 0) return [];
+    if (histFromInception.size === 0) return [];
     const portfolioHistory = buildPortfolioHistory(
       HOLDINGS.map((h) => ({ ticker: h.ticker, shares: h.shares })),
-      histData
-    ).filter((d) => d.date >= PORTFOLIO_INCEPTION);
-    const spyHistory = histData.get('SPY') ?? [];
+      histFromInception
+    );
+    const spyHistory = histFromInception.get('SPY') ?? [];
     const spyDcaHistory = buildSpyDcaHistory(spyHistory, CASH_FLOWS);
     const chart = buildPerformanceChart(portfolioHistory, spyHistory, spyDcaHistory);
     return filterByPeriod(chart, period, PORTFOLIO_INCEPTION);
-  }, [histData, period]);
+  }, [histFromInception, period]);
 
   // Risk metrics
   const riskMetrics = useMemo(() => {
-    if (histData.size === 0) return null;
+    if (histFromInception.size === 0) return null;
     const portfolioHistory = buildPortfolioHistory(
       HOLDINGS.map((h) => ({ ticker: h.ticker, shares: h.shares })),
-      histData
-    ).filter((d) => d.date >= PORTFOLIO_INCEPTION);
-    const spyHistory = histData.get('SPY') ?? [];
+      histFromInception
+    );
+    const spyHistory = histFromInception.get('SPY') ?? [];
     return calcRiskMetrics(portfolioHistory, spyHistory);
-  }, [histData]);
+  }, [histFromInception]);
 
   // Weighted portfolio beta from quotes as quick fallback
   const portfolioBetaFromQuotes = useMemo(() => {
