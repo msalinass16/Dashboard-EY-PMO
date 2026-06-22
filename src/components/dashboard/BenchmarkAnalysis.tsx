@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import type { PerformancePoint, TimePeriod, RiskMetrics } from '@/types';
+import { PORTFOLIO_INCEPTION } from '@/data/holdings';
 import { Card } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { formatCurrency, formatPercent, formatPercentRaw, formatShortDate } from '@/utils/formatters';
@@ -87,7 +88,7 @@ interface BenchmarkAnalysisProps {
 }
 
 export function BenchmarkAnalysis({
-  performanceData,
+  performanceData: rawData,
   riskMetrics,
   isLoading,
   period,
@@ -96,6 +97,9 @@ export function BenchmarkAnalysis({
   portfolioCurrentValue,
   spyDcaCurrentValue,
 }: BenchmarkAnalysisProps) {
+  // Hard guard: never display data before portfolio inception regardless of what upstream passes
+  const performanceData = rawData.filter((d) => d.date >= PORTFOLIO_INCEPTION);
+
   const lastPoint = performanceData[performanceData.length - 1];
   const portReturn = lastPoint ? (lastPoint.portfolio - 100) / 100 : 0;
   const spyReturn = lastPoint?.spy != null ? (lastPoint.spy - 100) / 100 : undefined;
@@ -124,11 +128,9 @@ export function BenchmarkAnalysis({
       }
     >
       {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5 p-3 bg-bg-secondary/50 rounded-lg">
-        <RelativeMetric label={`Portfolio (${period})`} value={portReturn} />
-        <RelativeMetric label={`SPY (${period})`} value={spyReturn} />
-        <RelativeMetric label="Alpha vs SPY" value={riskMetrics?.alphaSPY} />
-        <RelativeMetric label="Excess Return vs SPY" value={riskMetrics?.excessReturnSPY} />
+      <div className="grid grid-cols-2 gap-4 mb-5 p-3 bg-bg-secondary/50 rounded-lg">
+        <RelativeMetric label="Portfolio (since May 11)" value={portReturn} />
+        <RelativeMetric label="SPY (since May 11)" value={spyReturn} />
       </div>
 
       {isLoading ? (
@@ -260,12 +262,6 @@ export function BenchmarkAnalysis({
         </div>
       </div>
 
-      {/* Correlation */}
-      {riskMetrics && (
-        <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 mt-4 pt-4 border-t border-border">
-          <RelativeMetric label="Correlation to SPY" value={riskMetrics.correlationSPY} format="raw" />
-        </div>
-      )}
     </Card>
   );
 }
