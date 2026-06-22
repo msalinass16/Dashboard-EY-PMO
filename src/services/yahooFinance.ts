@@ -10,10 +10,11 @@ function yfUrl(path: string): string {
   return `/api/yahoo/${path}`;
 }
 
-// Public CORS proxy fallback — used only when the primary route returns blocked HTML.
-function corsProxyUrl(path: string): string {
-  return `https://corsproxy.io/?url=${encodeURIComponent(`${YF_BASE}/${path}`)}`;
-}
+// Public CORS proxy fallbacks — tried in order when the Edge function is unavailable.
+const CORS_PROXIES = [
+  (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+];
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
@@ -33,14 +34,19 @@ async function attemptFetch(url: string): Promise<unknown> {
   return JSON.parse(text);
 }
 
-// Try Edge function first; fall back to public CORS proxy if blocked.
+// Try Edge function first, then public CORS proxies in order.
 async function yfetch(path: string): Promise<unknown> {
-  try {
-    return await attemptFetch(yfUrl(path));
-  } catch {
-    // Edge function blocked or failed — try public CORS proxy
-    return await attemptFetch(corsProxyUrl(path));
+  const yahooUrl = `${YF_BASE}/${path}`;
+  const attempts = [yfUrl(path), ...CORS_PROXIES.map((fn) => fn(yahooUrl))];
+  let lastErr: unknown;
+  for (const url of attempts) {
+    try {
+      return await attemptFetch(url);
+    } catch (e) {
+      lastErr = e;
+    }
   }
+  throw lastErr;
 }
 
 // ─── Quotes ──────────────────────────────────────────────────────────────────
