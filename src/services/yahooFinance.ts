@@ -1,21 +1,46 @@
 import type { QuoteData, HistoricalDataPoint, FundamentalData } from '@/types';
 
-const BASE = '/api/yahoo';
-const TIMEOUT_MS = 10_000;
+const YF_BASE = 'https://query1.finance.yahoo.com';
+const TIMEOUT_MS = 12_000;
+
+// Build a URL for the given Yahoo Finance path.
+// Dev  → Vite dev-server proxy  (/api/yahoo/…)
+// Prod → Vercel Edge function    (/api/yahoo/…)  [same path, different handler]
+function yfUrl(path: string): string {
+  return `/api/yahoo/${path}`;
+}
+
+// Public CORS proxy fallback — used only when the primary route returns blocked HTML.
+function corsProxyUrl(path: string): string {
+  return `https://corsproxy.io/?url=${encodeURIComponent(`${YF_BASE}/${path}`)}`;
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms)
+      setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
     ),
   ]);
 }
 
-async function yfetch(url: string): Promise<unknown> {
+async function attemptFetch(url: string): Promise<unknown> {
   const res = await withTimeout(fetch(url), TIMEOUT_MS);
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${url}`);
-  return res.json();
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  // Yahoo Finance sometimes returns an HTML consent/block page with 200 status
+  if (text.trimStart().startsWith('<')) throw new Error('Blocked — received HTML');
+  return JSON.parse(text);
+}
+
+// Try Edge function first; fall back to public CORS proxy if blocked.
+async function yfetch(path: string): Promise<unknown> {
+  try {
+    return await attemptFetch(yfUrl(path));
+  } catch {
+    // Edge function blocked or failed — try public CORS proxy
+    return await attemptFetch(corsProxyUrl(path));
+  }
 }
 
 // ─── Quotes ──────────────────────────────────────────────────────────────────
@@ -23,8 +48,7 @@ async function yfetch(url: string): Promise<unknown> {
 // Uses v8/finance/chart per ticker — more reliable than v7/finance/quote batch
 // which now requires Yahoo authentication in many regions.
 async function fetchSingleQuote(ticker: string): Promise<QuoteData> {
-  const url = `${BASE}/v8/finance/chart/${ticker}?interval=1d&range=5d&includeAdjustedClose=true`;
-  const data = (await yfetch(url)) as {
+  const data = (await yfetch(`v8/finance/chart/${ticker}?interval=1d&range=5d&includeAdjustedClose=true`)) as {
     chart?: { result?: Array<{
       meta?: {
         symbol?: string;
@@ -85,8 +109,7 @@ export async function fetchHistorical(
   ticker: string,
   range: YFRange = '1y'
 ): Promise<HistoricalDataPoint[]> {
-  const url = `${BASE}/v8/finance/chart/${ticker}?interval=1d&range=${range}&includeAdjustedClose=true`;
-  const data = (await yfetch(url)) as {
+  const data = (await yfetch(`v8/finance/chart/${ticker}?interval=1d&range=${range}&includeAdjustedClose=true`)) as {
     chart?: {
       result?: Array<{
         timestamp?: number[];
@@ -190,8 +213,7 @@ export async function fetchFundamentals(ticker: string): Promise<FundamentalData
   ].join(',');
 
   try {
-    const url = `${BASE}/v10/finance/quoteSummary/${ticker}?modules=${modules}`;
-    const data = (await yfetch(url)) as { quoteSummary?: { result?: YFSummary[] } };
+    const data = (await yfetch(`v10/finance/quoteSummary/${ticker}?modules=${modules}`)) as { quoteSummary?: { result?: YFSummary[] } };
 
     const s = data?.quoteSummary?.result?.[0];
     if (!s) return null;
