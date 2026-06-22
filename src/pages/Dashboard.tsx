@@ -146,6 +146,7 @@ export function Dashboard() {
               ? (performanceData[performanceData.length - 1].spyDcaValue ?? null)
               : null
           }
+          portfolioGainLossPercent={summary?.totalGainLossPercent ?? null}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -85,6 +85,7 @@ interface BenchmarkAnalysisProps {
   totalDeposited: number;
   portfolioCurrentValue: number | null;
   spyDcaCurrentValue: number | null;
+  portfolioGainLossPercent: number | null;
 }
 
 export function BenchmarkAnalysis({
@@ -96,12 +97,13 @@ export function BenchmarkAnalysis({
   totalDeposited,
   portfolioCurrentValue,
   spyDcaCurrentValue,
+  portfolioGainLossPercent,
 }: BenchmarkAnalysisProps) {
   // Hard guard: never display data before portfolio inception regardless of what upstream passes
   const performanceData = rawData.filter((d) => d.date >= PORTFOLIO_INCEPTION);
 
   const lastPoint = performanceData[performanceData.length - 1];
-  const portReturn = lastPoint ? (lastPoint.portfolio - 100) / 100 : 0;
+  const portReturn = portfolioGainLossPercent ?? (lastPoint ? (lastPoint.portfolio - 100) / 100 : 0);
   const spyReturn = lastPoint?.spy != null ? (lastPoint.spy - 100) / 100 : undefined;
 
   // SPY DCA comparison
