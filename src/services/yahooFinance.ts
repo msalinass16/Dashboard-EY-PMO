@@ -20,55 +20,61 @@ async function yfetch(url: string): Promise<unknown> {
 
 // ─── Quotes ──────────────────────────────────────────────────────────────────
 
-interface YFv7Result {
-  symbol: string;
-  shortName?: string;
-  longName?: string;
-  regularMarketPrice?: number;
-  regularMarketPreviousClose?: number;
-  regularMarketChange?: number;
-  regularMarketChangePercent?: number;
-  regularMarketVolume?: number;
-  marketCap?: number;
-  trailingPE?: number;
-  forwardPE?: number;
-  beta?: number;
-  fiftyTwoWeekHigh?: number;
-  fiftyTwoWeekLow?: number;
-  dividendYield?: number;
-  epsTrailingTwelveMonths?: number;
-  sector?: string;
-  industry?: string;
+// Uses v8/finance/chart per ticker — more reliable than v7/finance/quote batch
+// which now requires Yahoo authentication in many regions.
+async function fetchSingleQuote(ticker: string): Promise<QuoteData> {
+  const url = `${BASE}/v8/finance/chart/${ticker}?interval=1d&range=5d&includeAdjustedClose=true`;
+  const data = (await yfetch(url)) as {
+    chart?: { result?: Array<{
+      meta?: {
+        symbol?: string;
+        longName?: string;
+        shortName?: string;
+        regularMarketPrice?: number;
+        previousClose?: number;
+        chartPreviousClose?: number;
+        regularMarketVolume?: number;
+        marketCap?: number;
+        trailingPE?: number;
+        fiftyTwoWeekHigh?: number;
+        fiftyTwoWeekLow?: number;
+        dividendYield?: number;
+        exchangeTimezoneName?: string;
+      };
+      indicators?: { adjclose?: Array<{ adjclose?: number[] }> };
+    }> };
+  };
+
+  const result = data?.chart?.result?.[0];
+  if (!result) throw new Error(`No chart data for ${ticker}`);
+
+  const meta = result.meta ?? {};
+  const closes = result.indicators?.adjclose?.[0]?.adjclose ?? [];
+  const price = meta.regularMarketPrice ?? closes[closes.length - 1] ?? 0;
+  const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? closes[closes.length - 2] ?? price;
+  const change = price - prevClose;
+
+  return {
+    ticker,
+    name: meta.longName ?? meta.shortName ?? ticker,
+    price,
+    previousClose: prevClose,
+    change,
+    changePercent: prevClose > 0 ? change / prevClose : 0,
+    marketCap: meta.marketCap,
+    volume: meta.regularMarketVolume,
+    pe: meta.trailingPE,
+    fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
+    fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
+    dividendYield: meta.dividendYield,
+  };
 }
 
 export async function fetchQuotes(tickers: string[]): Promise<QuoteData[]> {
-  const symbols = tickers.join(',');
-  const url = `${BASE}/v7/finance/quote?symbols=${symbols}&fields=shortName,longName,regularMarketPrice,regularMarketPreviousClose,regularMarketChange,regularMarketChangePercent,regularMarketVolume,marketCap,trailingPE,forwardPE,beta,fiftyTwoWeekHigh,fiftyTwoWeekLow,dividendYield,epsTrailingTwelveMonths,sector,industry`;
-
-  const data = (await yfetch(url)) as {
-    quoteResponse?: { result?: YFv7Result[]; error?: unknown };
-  };
-
-  const results = data?.quoteResponse?.result ?? [];
-  return results.map((r) => ({
-    ticker: r.symbol,
-    name: r.longName ?? r.shortName ?? r.symbol,
-    price: r.regularMarketPrice ?? 0,
-    previousClose: r.regularMarketPreviousClose ?? 0,
-    change: r.regularMarketChange ?? 0,
-    changePercent: (r.regularMarketChangePercent ?? 0) / 100,
-    marketCap: r.marketCap,
-    volume: r.regularMarketVolume,
-    pe: r.trailingPE,
-    forwardPE: r.forwardPE,
-    beta: r.beta,
-    fiftyTwoWeekHigh: r.fiftyTwoWeekHigh,
-    fiftyTwoWeekLow: r.fiftyTwoWeekLow,
-    dividendYield: r.dividendYield,
-    eps: r.epsTrailingTwelveMonths,
-    sector: r.sector,
-    industry: r.industry,
-  }));
+  const results = await Promise.allSettled(tickers.map(fetchSingleQuote));
+  return results
+    .filter((r): r is PromiseFulfilledResult<QuoteData> => r.status === 'fulfilled')
+    .map((r) => r.value);
 }
 
 // ─── Historical ───────────────────────────────────────────────────────────────
