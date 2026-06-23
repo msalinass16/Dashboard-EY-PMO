@@ -120,7 +120,7 @@ export const HOLDINGS: Holding[] = [
   },
 ];
 
-export const BENCHMARK_TICKERS = ['SPY'] as const;
+export const BENCHMARK_TICKERS = ['SPY', 'QQQ'] as const;
 export const ALL_TICKERS = [...HOLDINGS.map((h) => h.ticker), ...BENCHMARK_TICKERS];
 
 export const RISK_FREE_RATE = 0.0525; // 5.25% — approximate current T-bill rate

@@ -163,8 +163,52 @@ export interface PerformancePoint {
   date: string;
   portfolio: number;
   spy: number | null;
+  qqq: number | null;
   spyDcaValue: number | null;
   portfolioValue?: number;
+}
+
+export interface DrawdownPoint {
+  date: string;
+  drawdown: number; // negative decimal, e.g. -0.05 = -5%
+  portfolioValue: number;
+  peakValue: number;
+}
+
+export interface WatchlistItem {
+  ticker: string;
+  addedAt: string;
+  targetBuyPrice?: number;
+  note?: string;
+}
+
+export type JournalAction = 'BUY' | 'SELL' | 'WATCH' | 'NOTE';
+
+export interface JournalEntry {
+  id: string;
+  date: string;
+  ticker: string;
+  action: JournalAction;
+  price?: number;
+  thesis: string;
+  catalysts?: string;
+  risks?: string;
+  expectedReturn?: number;
+  conviction: number; // 1-10
+  outcome?: string;
+}
+
+export interface PortfolioHealthMetrics {
+  score: number; // 0-100
+  components: {
+    diversification: number; // 0-100
+    concentration: number;   // 0-100
+    performance: number;     // 0-100
+    volatility: number;      // 0-100
+    valuation: number;       // 0-100
+  };
+  strengths: string[];
+  weaknesses: string[];
 }
 
 export interface SectorAllocation {
